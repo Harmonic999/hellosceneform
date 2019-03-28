@@ -1,6 +1,7 @@
 
 package com.google.ar.sceneform.samples.hellosceneform;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
@@ -16,6 +17,7 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.Scene;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Color;
@@ -24,12 +26,11 @@ import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.ShapeFactory;
 import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
-import com.google.ar.sceneform.ux.TransformableNode;
 
+import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Consumer;
 
-
+@SuppressLint("SetTextI18n")
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "test_" + MainActivity.class.getSimpleName();
     private static final double MIN_OPENGL_VERSION = 3.0;
@@ -37,18 +38,21 @@ public class MainActivity extends AppCompatActivity {
     private static final String FIRST_NODE_NAME = "first_node";
     private static final String SECOND_NODE_NAME = "second_node";
 
+    private static final Color formColor = new Color(0, 0, 0, 0.5f);
+
     private ArFragment arFragment;
 
     private AnchorNode firstAnchorNode;
     private AnchorNode secondAnchorNode;
 
-    private TransformableNode firstNode;
-    private TransformableNode secondNode;
+    private Node firstNode;
+    private Node secondNode;
 
     private Node lineNode;
     private Node labelNode;
 
     private ViewRenderable tvLabelRenderable;
+    private TextView tvLabel;
 
     public MainActivity() {
     }
@@ -69,6 +73,16 @@ public class MainActivity extends AppCompatActivity {
                         if (firstAnchorNode == null) {
                             firstAnchorNode = createAndDrawNode(hitResult, FIRST_NODE_NAME);
                         } else if (secondAnchorNode == null) {
+
+                            ViewRenderable.builder()
+                                    .setView(this, R.layout.label_layout)
+                                    .build().thenAccept(viewRenderable -> {
+                                viewRenderable.setShadowCaster(false);
+                                viewRenderable.setShadowReceiver(false);
+                                tvLabel = viewRenderable.getView().findViewById(R.id.tv_label);
+                                tvLabelRenderable = viewRenderable;
+                            });
+
                             secondAnchorNode = createAndDrawNode(hitResult, SECOND_NODE_NAME);
                             lineNode = createAndDrawLineBetweenTwoPositions(
                                     firstAnchorNode.getWorldPosition(),
@@ -83,10 +97,6 @@ public class MainActivity extends AppCompatActivity {
                     });
         }
 
-        ViewRenderable.builder()
-                .setView(this, R.layout.label_layout)
-                .build().thenAccept(viewRenderable -> tvLabelRenderable = viewRenderable);
-
     }
 
     public AnchorNode createAndDrawNode(HitResult hitResult, String name) {
@@ -99,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void drawSphere(AnchorNode anchorNode, String name) {
-        MaterialFactory.makeTransparentWithColor(getApplicationContext(), new Color(0, 0, 0))
+        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
                 .thenAccept(
                         material -> {
 
@@ -107,9 +117,7 @@ public class MainActivity extends AppCompatActivity {
                             model.setShadowCaster(false);
                             model.setShadowReceiver(false);
 
-                            TransformableNode node = new TransformableNode(
-                                    arFragment.getTransformationSystem()
-                            );
+                            Node node = new Node();
 
                             node.setParent(anchorNode);
                             node.setRenderable(model);
@@ -148,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
                 Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
 
         Node node = new Node();
-        MaterialFactory.makeOpaqueWithColor(getApplicationContext(), new Color(0, 0, 0))
+        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
                 .thenAccept(
                         material -> {
 
@@ -174,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
         final Quaternion rotationFromAToB =
                 Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
 
-        MaterialFactory.makeOpaqueWithColor(getApplicationContext(), new Color(0, 0, 0))
+        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
                 .thenAccept(
                         material -> {
 
@@ -187,7 +195,29 @@ public class MainActivity extends AppCompatActivity {
                             node.setRenderable(model);
                             node.setWorldPosition(Vector3.add(pos1, pos2).scaled(.5f));
                             node.setWorldRotation(rotationFromAToB);
+
+                            if (labelNode == null && tvLabelRenderable != null) {
+                                labelNode = new Node();
+                                labelNode.setParent(node);
+                                labelNode.setRenderable(tvLabelRenderable);
+                                labelNode.setWorldPosition(node.getWorldPosition());
+                                updateDifferenceInMetersLabelState(labelNode, difference.length());
+                            } else if (tvLabelRenderable != null) {
+                                updateDifferenceInMetersLabelState(labelNode, difference.length());
+                            }
                         }
                 );
+    }
+
+    private void updateDifferenceInMetersLabelState(Node labelNode, float difference) {
+        Scene scene = labelNode.getScene();
+        if (scene != null) {
+            Vector3 cameraPosition = scene.getCamera().getWorldPosition();
+            Vector3 direction = Vector3.subtract(cameraPosition, labelNode.getWorldPosition());
+            Quaternion lookRotation = Quaternion.lookRotation(direction, Vector3.up());
+            labelNode.setWorldRotation(lookRotation);
+        }
+        labelNode.setLocalPosition(new Vector3(0, 0.04f, 0));
+        tvLabel.setText(String.format(Locale.US, "%.2f", difference) + "m");
     }
 }

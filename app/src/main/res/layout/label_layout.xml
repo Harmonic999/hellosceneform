@@ -5,9 +5,10 @@
     android:layout_height="wrap_content"
     android:background="#50FFFFFF"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="2dp">
 
     <TextView
+        android:textSize="8sp"
         android:id="@+id/tv_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
