@@ -1,4 +1,4 @@
-package com.google.ar.sceneform.samples.hellosceneform;
+package com.google.ar.sceneform.samples.hellosceneform.geometry;
 
 
 import android.widget.TextView;
@@ -21,6 +21,10 @@ public class Line {
 
     private ViewRenderable tvLabelRenderable;
     private TextView tvLabel;
+
+    private Vector3 baseSecondNodePosition;
+
+    private float length;
 
     public AnchorNode getFirstAnchorNode() {
         return firstAnchorNode;
@@ -52,6 +56,7 @@ public class Line {
 
     public void setSecondNode(Node secondNode) {
         this.secondNode = secondNode;
+        this.baseSecondNodePosition = secondNode.getWorldPosition();
     }
 
     public Node getLineNode() {
@@ -96,5 +101,17 @@ public class Line {
 
     public Vector3 getSecondPos() {
         return secondNode.getWorldPosition();
+    }
+
+    public Vector3 getBaseSecondNodePosition() {
+        return baseSecondNodePosition;
+    }
+
+    public float getLength() {
+        return length;
+    }
+
+    public void setLength(float length) {
+        this.length = length;
     }
 }

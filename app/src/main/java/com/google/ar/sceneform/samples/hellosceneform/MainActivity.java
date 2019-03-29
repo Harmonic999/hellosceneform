@@ -4,7 +4,10 @@ package com.google.ar.sceneform.samples.hellosceneform;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.MotionEvent;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 import com.google.ar.core.Anchor;
 import com.google.ar.core.HitResult;
@@ -15,10 +18,12 @@ import com.google.ar.sceneform.Scene;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Color;
+import com.google.ar.sceneform.rendering.Material;
 import com.google.ar.sceneform.rendering.MaterialFactory;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.ShapeFactory;
 import com.google.ar.sceneform.rendering.ViewRenderable;
+import com.google.ar.sceneform.samples.hellosceneform.geometry.Line;
 import com.google.ar.sceneform.samples.hellosceneform.util.SupportDevice;
 import com.google.ar.sceneform.ux.ArFragment;
 
@@ -33,9 +38,14 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int MAX_LINES = 2;
 
-    private static final Color formColor = new Color(0, 0, 0, 0.7f);
+    private static final Color formColor = new Color(255, 0, 0, 0.7f);
     private ArFragment arFragment;
     private List<Line> lines;
+
+    private SeekBar sbHeight;
+    private TextView tvVolume;
+
+    private Material shapeMaterial;
 
     public MainActivity() {
     }
@@ -51,6 +61,10 @@ public class MainActivity extends AppCompatActivity {
         lines = new ArrayList<>();
 
         setContentView(R.layout.activity_ux);
+        sbHeight = findViewById(R.id.sb_height);
+        sbHeight.setMax(100);
+        tvVolume = findViewById(R.id.tv_volume);
+
         arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
         if (arFragment != null) {
             arFragment.setOnTapArPlaneListener(
@@ -74,17 +88,74 @@ public class MainActivity extends AppCompatActivity {
                                 Line line = lines.get(i);
                                 if (!line.anchorsInitialized()) {
                                     if (line.getSecondAnchorNode() == null) {
-                                        buildAndSetViewLabel(line);
                                         AnchorNode anchorNode = createAndDrawNode(hitResult, line);
                                         line.setSecondAnchorNode(anchorNode);
+                                        buildAndSetViewLabel(line);
                                         createAndDrawLineBetweenTwoPositions(line);
-
-                                        anchorNode.addTransformChangedListener(
-                                                (node, node1) -> updateLine(line)
-                                        );
                                     }
                                 }
                             }
+                        }
+
+                        if (lines.size() == MAX_LINES && allAnchorsInitialized()) {
+                            Log.i(TAG, "creating vertical line");
+                            Line firstLine = lines.get(0);
+                            Line verticalLine = new Line();
+                            verticalLine.setFirstAnchorNode(firstLine.getSecondAnchorNode());
+                            verticalLine.setFirstNode(firstLine.getSecondNode());
+
+                            verticalLine.setSecondAnchorNode(new AnchorNode());
+                            Node aboveNode = new Node();
+
+                            Vector3 aboveNodePosition = new Vector3();
+                            aboveNodePosition.x = verticalLine.getFirstPos().x;
+                            aboveNodePosition.y = verticalLine.getFirstPos().y + 0.05f;
+                            aboveNodePosition.z = verticalLine.getFirstPos().z;
+                            aboveNode.setWorldPosition(aboveNodePosition);
+                            verticalLine.setSecondNode(aboveNode);
+                            lines.add(verticalLine);
+
+                            buildAndSetViewLabel(verticalLine);
+
+                            createAndDrawLineBetweenTwoPositions(verticalLine);
+                            aboveNode.addTransformChangedListener((node, node1) -> {
+                                updateLine(verticalLine);
+
+                                float volume = lines.get(0).getLength();
+                                for (int i = 1; i < lines.size(); i++) {
+                                    volume *= (lines.get(i).getLength());
+                                }
+
+                                tvVolume.setText("V= ~" + String.format(Locale.US, "%.2f", volume) + "cm\u00B3");
+                            });
+
+                            for (Line line : lines) {
+                                line.getFirstNode().setRenderable(null);
+                                line.getSecondNode().setRenderable(null);
+                            }
+
+                            sbHeight.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                                @Override
+                                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                                    Vector3 basePosition = verticalLine.getBaseSecondNodePosition();
+                                    Vector3 newPosition = new Vector3();
+                                    newPosition.x = basePosition.x;
+                                    newPosition.y = basePosition.y + progress / 100f;
+                                    newPosition.z = basePosition.z;
+                                    aboveNode.setWorldPosition(newPosition);
+                                }
+
+                                @Override
+                                public void onStartTrackingTouch(SeekBar seekBar) {
+                                    //do nothing
+                                }
+
+                                @Override
+                                public void onStopTrackingTouch(SeekBar seekBar) {
+                                    //do nothing
+                                }
+                            });
+
                         }
                     });
         }
@@ -111,6 +182,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void drawSphere(AnchorNode anchorNode, Line line) {
+
+        Node node = new Node();
+        node.setParent(anchorNode);
+
+        if (line.getFirstNode() == null) {
+            Log.i(TAG, "setting first node");
+            line.setFirstNode(node);
+        } else if (line.getSecondNode() == null) {
+            Log.i(TAG, "setting second node");
+            line.setSecondNode(node);
+        }
+
         MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
                 .thenAccept(
                         material -> {
@@ -121,16 +204,7 @@ public class MainActivity extends AppCompatActivity {
 
                             model.setShadowCaster(false);
                             model.setShadowReceiver(false);
-
-                            Node node = new Node();
-                            node.setParent(anchorNode);
                             node.setRenderable(model);
-
-                            if (line.getFirstNode() == null) {
-                                line.setFirstNode(node);
-                            } else {
-                                line.setSecondNode(node);
-                            }
                         });
     }
 
@@ -159,6 +233,8 @@ public class MainActivity extends AppCompatActivity {
                                     line.getFirstPos(),
                                     line.getSecondPos()).scaled(.5f));
 
+                            line.setLength(difference.length() * 100);
+
                             node.setWorldRotation(rotationFromAToB);
                             line.setLineNode(node);
                         }
@@ -168,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateLine(Line line) {
         final Vector3 difference = Vector3.subtract(line.getFirstPos(), line.getSecondPos());
         final Vector3 directionFromTopToBottom = difference.normalized();
+
         final Quaternion rotationFromAToB =
                 Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
 
@@ -220,6 +297,19 @@ public class MainActivity extends AppCompatActivity {
             labelNode.setWorldRotation(lookRotation);
         }
         labelNode.setLocalPosition(new Vector3(0, 0.04f, 0));
-        line.getTvLabel().setText(String.format(Locale.US, "%.2f", difference) + "m");
+        line.setLength(difference * 100);
+        line.getTvLabel().setText(String.format(Locale.US, "%.2f", difference * 100) + "cm");
+    }
+
+    private boolean allAnchorsInitialized() {
+        boolean allAnchorsInitialized = true;
+        for (int i = 0; i < lines.size(); i++) {
+            if (!lines.get(i).anchorsInitialized()) {
+                allAnchorsInitialized = false;
+                break;
+            }
+        }
+
+        return allAnchorsInitialized;
     }
 }
