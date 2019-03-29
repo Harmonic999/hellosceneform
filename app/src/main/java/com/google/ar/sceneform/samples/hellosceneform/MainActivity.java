@@ -5,13 +5,14 @@ import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
-import android.view.MotionEvent;
+import android.view.View;
+import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.google.ar.core.Anchor;
+import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
-import com.google.ar.core.Plane;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.Scene;
@@ -60,6 +61,107 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        setContentView(R.layout.activity_ux);
+        sbHeight = findViewById(R.id.sb_height);
+        sbHeight.setMax(100);
+        tvVolume = findViewById(R.id.tv_volume);
+
+        Button btnTap = findViewById(R.id.btn_tap);
+        btnTap.setOnClickListener(v -> {
+
+            Frame frame = arFragment.getArSceneView().getArFrame();
+            if (frame == null) return;
+
+            List<HitResult> results = frame.hitTest(getScreenCenter().x, getScreenCenter().y);
+
+            if (!results.isEmpty()) {
+                if (shapeMaterial == null) return; //wait for material to be surely created
+
+                if (baseLines.isEmpty()) {
+                    Line line = new Line();
+                    line.setFirstAnchorNode(createAndDrawNode(results.get(0), line));
+                    baseLines.add(line);
+                } else {
+
+                    Line lastLine = baseLines.get(baseLines.size() - 1);
+                    if (lastLine.anchorsInitialized() && baseLines.size() < MAX_LINES) {
+                        Line line = new Line();
+                        line.setFirstAnchorNode(lastLine.getSecondAnchorNode());
+                        line.setFirstNode(lastLine.getSecondNode());
+                        baseLines.add(line);
+                    }
+
+                    for (int i = 0; i < baseLines.size(); i++) {
+                        Line line = baseLines.get(i);
+                        if (!line.anchorsInitialized()) {
+                            if (line.getSecondAnchorNode() == null) {
+                                AnchorNode anchorNode = createAndDrawNode(results.get(0), line);
+                                line.setSecondAnchorNode(anchorNode);
+                                buildAndSetViewLabel(line);
+                                createAndDrawLineBetweenTwoPositions(line);
+                            }
+                        }
+                    }
+                }
+
+                if (baseLines.size() == MAX_LINES && allAnchorsInitialized()) {
+
+                    arFragment.setOnTapArPlaneListener(null);
+
+                    Line firstLine = baseLines.get(0);
+                    Line verticalLine = new Line();
+                    verticalLine.setFirstAnchorNode(firstLine.getSecondAnchorNode());
+                    verticalLine.setFirstNode(firstLine.getSecondNode());
+
+                    verticalLine.setSecondAnchorNode(new AnchorNode());
+                    Node aboveNode = new Node();
+
+                    Vector3 aboveNodePosition = new Vector3();
+                    aboveNodePosition.x = verticalLine.getFirstPos().x;
+                    aboveNodePosition.y = verticalLine.getFirstPos().y + 0.05f;
+                    aboveNodePosition.z = verticalLine.getFirstPos().z;
+                    aboveNode.setWorldPosition(aboveNodePosition);
+                    verticalLine.setSecondNode(aboveNode);
+                    baseLines.add(verticalLine);
+
+                    buildAndSetViewLabel(verticalLine);
+
+                    createAndDrawLineBetweenTwoPositions(verticalLine);
+
+                    for (Line line : baseLines) {
+                        line.getFirstNode().setRenderable(null);
+                        line.getSecondNode().setRenderable(null);
+                    }
+
+                    sbHeight.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                        @Override
+                        public void onProgressChanged(
+                                SeekBar seekBar,
+                                int progress,
+                                boolean fromUser) {
+
+                            Vector3 basePosition = verticalLine.getBaseSecondNodePosition();
+                            Vector3 newPosition = new Vector3();
+                            newPosition.x = basePosition.x;
+                            newPosition.y = basePosition.y + progress / 100f;
+                            newPosition.z = basePosition.z;
+                            aboveNode.setWorldPosition(newPosition);
+                        }
+
+                        @Override
+                        public void onStartTrackingTouch(SeekBar seekBar) {
+                            //do nothing
+                        }
+
+                        @Override
+                        public void onStopTrackingTouch(SeekBar seekBar) {
+                            //do nothing
+                        }
+                    });
+                }
+            }
+        });
+
         baseLines = new ArrayList<>();
 
         Handler handler = new Handler();
@@ -88,106 +190,15 @@ public class MainActivity extends AppCompatActivity {
 
         handler.postDelayed(runnable, DELAY_UPDATE);
 
-        setContentView(R.layout.activity_ux);
-        sbHeight = findViewById(R.id.sb_height);
-        sbHeight.setMax(100);
-        tvVolume = findViewById(R.id.tv_volume);
-
         MaterialFactory.makeOpaqueWithColor(this, formColor)
                 .thenAccept(material -> shapeMaterial = material);
 
         arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
-        if (arFragment != null) {
-            arFragment.setOnTapArPlaneListener(
-                    (HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
+    }
 
-                        if (shapeMaterial == null) return; //wait for material to be surely created
-
-                        if (baseLines.isEmpty()) {
-                            Line line = new Line();
-                            line.setFirstAnchorNode(createAndDrawNode(hitResult, line));
-                            baseLines.add(line);
-                        } else {
-
-                            Line lastLine = baseLines.get(baseLines.size() - 1);
-                            if (lastLine.anchorsInitialized() && baseLines.size() < MAX_LINES) {
-                                Line line = new Line();
-                                line.setFirstAnchorNode(lastLine.getSecondAnchorNode());
-                                line.setFirstNode(lastLine.getSecondNode());
-                                baseLines.add(line);
-                            }
-
-                            for (int i = 0; i < baseLines.size(); i++) {
-                                Line line = baseLines.get(i);
-                                if (!line.anchorsInitialized()) {
-                                    if (line.getSecondAnchorNode() == null) {
-                                        AnchorNode anchorNode = createAndDrawNode(hitResult, line);
-                                        line.setSecondAnchorNode(anchorNode);
-                                        buildAndSetViewLabel(line);
-                                        createAndDrawLineBetweenTwoPositions(line);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (baseLines.size() == MAX_LINES && allAnchorsInitialized()) {
-
-                            arFragment.setOnTapArPlaneListener(null);
-
-                            Line firstLine = baseLines.get(0);
-                            Line verticalLine = new Line();
-                            verticalLine.setFirstAnchorNode(firstLine.getSecondAnchorNode());
-                            verticalLine.setFirstNode(firstLine.getSecondNode());
-
-                            verticalLine.setSecondAnchorNode(new AnchorNode());
-                            Node aboveNode = new Node();
-
-                            Vector3 aboveNodePosition = new Vector3();
-                            aboveNodePosition.x = verticalLine.getFirstPos().x;
-                            aboveNodePosition.y = verticalLine.getFirstPos().y + 0.05f;
-                            aboveNodePosition.z = verticalLine.getFirstPos().z;
-                            aboveNode.setWorldPosition(aboveNodePosition);
-                            verticalLine.setSecondNode(aboveNode);
-                            baseLines.add(verticalLine);
-
-                            buildAndSetViewLabel(verticalLine);
-
-                            createAndDrawLineBetweenTwoPositions(verticalLine);
-
-                            for (Line line : baseLines) {
-                                line.getFirstNode().setRenderable(null);
-                                line.getSecondNode().setRenderable(null);
-                            }
-
-                            sbHeight.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                                @Override
-                                public void onProgressChanged(
-                                        SeekBar seekBar,
-                                        int progress,
-                                        boolean fromUser) {
-
-                                    Vector3 basePosition = verticalLine.getBaseSecondNodePosition();
-                                    Vector3 newPosition = new Vector3();
-                                    newPosition.x = basePosition.x;
-                                    newPosition.y = basePosition.y + progress / 100f;
-                                    newPosition.z = basePosition.z;
-                                    aboveNode.setWorldPosition(newPosition);
-                                }
-
-                                @Override
-                                public void onStartTrackingTouch(SeekBar seekBar) {
-                                    //do nothing
-                                }
-
-                                @Override
-                                public void onStopTrackingTouch(SeekBar seekBar) {
-                                    //do nothing
-                                }
-                            });
-
-                        }
-                    });
-        }
+    private Vector3 getScreenCenter() {
+        View vw = findViewById(android.R.id.content);
+        return new Vector3(vw.getWidth() / 2f, vw.getHeight() / 2f, 0f);
     }
 
     public void buildAndSetViewLabel(Line line) {

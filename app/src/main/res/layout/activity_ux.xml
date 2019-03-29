@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity"
-    tools:ignore="HardcodedText">
+    tools:ignore="HardcodedText, ContentDescription">
 
     <fragment
         android:id="@+id/ux_fragment"
@@ -17,13 +17,38 @@
         android:layout_height="wrap_content"
         android:background="#70000000"
         android:padding="5dp"
-        android:text="V = 0.00cm\u00B3" />
+        android:text="V = 0.00m\u00B3" />
 
-    <SeekBar
-        android:id="@+id/sb_height"
-        android:layout_width="match_parent"
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:background="#70000000">
+
+        <Button
+            android:id="@+id/btn_tap"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="8dp"
+            android:text="tap"
+            android:textAllCaps="true" />
+
+        <com.google.ar.sceneform.samples.hellosceneform.view.VerticalSeekBar
+            android:id="@+id/sb_height"
+            android:layout_width="56dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="56dp"
+            android:layout_marginBottom="16dp" />
+
+    </FrameLayout>
+
+    <ImageView
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_margin="16dp" />
+        android:layout_gravity="center"
+        android:src="@drawable/target_black_24dp"
+        android:tint="@android:color/holo_red_light" />
 
 </FrameLayout>
