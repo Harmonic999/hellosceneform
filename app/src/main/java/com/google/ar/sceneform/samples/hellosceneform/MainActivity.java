@@ -3,8 +3,8 @@ package com.google.ar.sceneform.samples.hellosceneform;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -36,11 +36,13 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "test_" + MainActivity.class.getSimpleName();
 
+    private static final int DELAY_UPDATE = 150;
+
     private static final int MAX_LINES = 2;
 
-    private static final Color formColor = new Color(255, 0, 0, 0.7f);
+    private static final Color formColor = new Color(0, 0, 255);
     private ArFragment arFragment;
-    private List<Line> lines;
+    private List<Line> baseLines;
 
     private SeekBar sbHeight;
     private TextView tvVolume;
@@ -58,34 +60,65 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        lines = new ArrayList<>();
+        baseLines = new ArrayList<>();
+
+        Handler handler = new Handler();
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                for (Line line : baseLines) {
+                    if (line.anchorsInitialized()) {
+                        updateLine(line);
+                    }
+                }
+
+                handler.postDelayed(this, DELAY_UPDATE);
+
+                if (baseLines.size() == 3) {
+                    float volume = baseLines.get(0).getLength();
+                    for (int i = 1; i < baseLines.size(); i++) {
+                        volume *= (baseLines.get(i).getLength());
+                    }
+                    tvVolume.setText("V= ~"
+                            + String.format(Locale.US, "%.2f", volume / 1000000)
+                            + "m\u00B3");
+                }
+            }
+        };
+
+        handler.postDelayed(runnable, DELAY_UPDATE);
 
         setContentView(R.layout.activity_ux);
         sbHeight = findViewById(R.id.sb_height);
         sbHeight.setMax(100);
         tvVolume = findViewById(R.id.tv_volume);
 
+        MaterialFactory.makeOpaqueWithColor(this, formColor)
+                .thenAccept(material -> shapeMaterial = material);
+
         arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
         if (arFragment != null) {
             arFragment.setOnTapArPlaneListener(
                     (HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
 
-                        if (lines.isEmpty()) {
+                        if (shapeMaterial == null) return; //wait for material to be surely created
+
+                        if (baseLines.isEmpty()) {
                             Line line = new Line();
                             line.setFirstAnchorNode(createAndDrawNode(hitResult, line));
-                            lines.add(line);
+                            baseLines.add(line);
                         } else {
 
-                            Line lastLine = lines.get(lines.size() - 1);
-                            if (lastLine.anchorsInitialized() && lines.size() < MAX_LINES) {
+                            Line lastLine = baseLines.get(baseLines.size() - 1);
+                            if (lastLine.anchorsInitialized() && baseLines.size() < MAX_LINES) {
                                 Line line = new Line();
                                 line.setFirstAnchorNode(lastLine.getSecondAnchorNode());
                                 line.setFirstNode(lastLine.getSecondNode());
-                                lines.add(line);
+                                baseLines.add(line);
                             }
 
-                            for (int i = 0; i < lines.size(); i++) {
-                                Line line = lines.get(i);
+                            for (int i = 0; i < baseLines.size(); i++) {
+                                Line line = baseLines.get(i);
                                 if (!line.anchorsInitialized()) {
                                     if (line.getSecondAnchorNode() == null) {
                                         AnchorNode anchorNode = createAndDrawNode(hitResult, line);
@@ -97,9 +130,11 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
 
-                        if (lines.size() == MAX_LINES && allAnchorsInitialized()) {
-                            Log.i(TAG, "creating vertical line");
-                            Line firstLine = lines.get(0);
+                        if (baseLines.size() == MAX_LINES && allAnchorsInitialized()) {
+
+                            arFragment.setOnTapArPlaneListener(null);
+
+                            Line firstLine = baseLines.get(0);
                             Line verticalLine = new Line();
                             verticalLine.setFirstAnchorNode(firstLine.getSecondAnchorNode());
                             verticalLine.setFirstNode(firstLine.getSecondNode());
@@ -113,30 +148,24 @@ public class MainActivity extends AppCompatActivity {
                             aboveNodePosition.z = verticalLine.getFirstPos().z;
                             aboveNode.setWorldPosition(aboveNodePosition);
                             verticalLine.setSecondNode(aboveNode);
-                            lines.add(verticalLine);
+                            baseLines.add(verticalLine);
 
                             buildAndSetViewLabel(verticalLine);
 
                             createAndDrawLineBetweenTwoPositions(verticalLine);
-                            aboveNode.addTransformChangedListener((node, node1) -> {
-                                updateLine(verticalLine);
 
-                                float volume = lines.get(0).getLength();
-                                for (int i = 1; i < lines.size(); i++) {
-                                    volume *= (lines.get(i).getLength());
-                                }
-
-                                tvVolume.setText("V= ~" + String.format(Locale.US, "%.2f", volume) + "cm\u00B3");
-                            });
-
-                            for (Line line : lines) {
+                            for (Line line : baseLines) {
                                 line.getFirstNode().setRenderable(null);
                                 line.getSecondNode().setRenderable(null);
                             }
 
                             sbHeight.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                                 @Override
-                                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                                public void onProgressChanged(
+                                        SeekBar seekBar,
+                                        int progress,
+                                        boolean fromUser) {
+
                                     Vector3 basePosition = verticalLine.getBaseSecondNodePosition();
                                     Vector3 newPosition = new Vector3();
                                     newPosition.x = basePosition.x;
@@ -187,25 +216,17 @@ public class MainActivity extends AppCompatActivity {
         node.setParent(anchorNode);
 
         if (line.getFirstNode() == null) {
-            Log.i(TAG, "setting first node");
             line.setFirstNode(node);
-        } else if (line.getSecondNode() == null) {
-            Log.i(TAG, "setting second node");
+        } else {
             line.setSecondNode(node);
         }
 
-        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
-                .thenAccept(
-                        material -> {
+        ModelRenderable model = ShapeFactory.makeSphere(0.015f, Vector3.zero(), shapeMaterial);
 
-                            ModelRenderable model = ShapeFactory.makeSphere(
-                                    0.015f, Vector3.zero(), material
-                            );
+        model.setShadowCaster(false);
+        model.setShadowReceiver(false);
+        node.setRenderable(model);
 
-                            model.setShadowCaster(false);
-                            model.setShadowReceiver(false);
-                            node.setRenderable(model);
-                        });
     }
 
     private void createAndDrawLineBetweenTwoPositions(Line line) {
@@ -215,30 +236,24 @@ public class MainActivity extends AppCompatActivity {
         final Quaternion rotationFromAToB =
                 Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
 
-        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
-                .thenAccept(
-                        material -> {
+        ModelRenderable model = ShapeFactory.makeCube(
+                new Vector3(.01f, .01f, difference.length()),
+                Vector3.zero(), shapeMaterial);
 
-                            ModelRenderable model = ShapeFactory.makeCube(
-                                    new Vector3(.01f, .01f, difference.length()),
-                                    Vector3.zero(), material);
+        model.setShadowCaster(false);
+        model.setShadowReceiver(false);
 
-                            model.setShadowCaster(false);
-                            model.setShadowReceiver(false);
+        Node node = new Node();
+        node.setParent(line.getFirstAnchorNode());
+        node.setRenderable(model);
+        node.setWorldPosition(Vector3.add(
+                line.getFirstPos(),
+                line.getSecondPos()).scaled(.5f));
 
-                            Node node = new Node();
-                            node.setParent(line.getFirstAnchorNode());
-                            node.setRenderable(model);
-                            node.setWorldPosition(Vector3.add(
-                                    line.getFirstPos(),
-                                    line.getSecondPos()).scaled(.5f));
+        line.setLength(difference.length() * 100);
 
-                            line.setLength(difference.length() * 100);
-
-                            node.setWorldRotation(rotationFromAToB);
-                            line.setLineNode(node);
-                        }
-                );
+        node.setWorldRotation(rotationFromAToB);
+        line.setLineNode(node);
     }
 
     private void updateLine(Line line) {
@@ -248,43 +263,35 @@ public class MainActivity extends AppCompatActivity {
         final Quaternion rotationFromAToB =
                 Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
 
-        MaterialFactory.makeTransparentWithColor(getApplicationContext(), formColor)
-                .thenAccept(
-                        material -> {
+        ModelRenderable model = ShapeFactory.makeCube(
+                new Vector3(.01f, .01f, difference.length()),
+                Vector3.zero(), shapeMaterial);
 
-                            ModelRenderable model = ShapeFactory.makeCube(
-                                    new Vector3(.01f, .01f, difference.length()),
-                                    Vector3.zero(), material);
+        model.setShadowCaster(false);
+        model.setShadowReceiver(false);
 
-                            model.setShadowCaster(false);
-                            model.setShadowReceiver(false);
+        Node lineNode = line.getLineNode();
+        lineNode.setRenderable(model);
+        lineNode.setWorldPosition(Vector3.add(
+                line.getFirstPos(),
+                line.getSecondPos()).scaled(.5f)
+        );
 
-                            Node lineNode = line.getLineNode();
-                            lineNode.setRenderable(model);
-                            lineNode.setWorldPosition(Vector3.add(
-                                    line.getFirstPos(),
-                                    line.getSecondPos()).scaled(.5f)
-                            );
+        lineNode.setWorldRotation(rotationFromAToB);
 
-                            lineNode.setWorldRotation(rotationFromAToB);
+        Node labelNode = line.getLabelNode();
+        ViewRenderable tvLabelRenderable = line.getTvLabelRenderable();
 
-                            Node labelNode = line.getLabelNode();
-                            ViewRenderable tvLabelRenderable = line.getTvLabelRenderable();
-
-                            if (labelNode == null && tvLabelRenderable != null) {
-                                //Log.i(TAG, "creating node for the label");
-                                labelNode = new Node();
-                                labelNode.setParent(lineNode);
-                                labelNode.setRenderable(tvLabelRenderable);
-                                labelNode.setWorldPosition(lineNode.getWorldPosition());
-                                line.setLabelNode(labelNode);
-                                updateDifferenceInMetersLabelState(line, difference.length());
-                            } else if (tvLabelRenderable != null) {
-                                //Log.i(TAG, "updating existing label");
-                                updateDifferenceInMetersLabelState(line, difference.length());
-                            }
-                        }
-                );
+        if (labelNode == null && tvLabelRenderable != null) {
+            labelNode = new Node();
+            labelNode.setParent(lineNode);
+            labelNode.setRenderable(tvLabelRenderable);
+            labelNode.setWorldPosition(lineNode.getWorldPosition());
+            line.setLabelNode(labelNode);
+            updateDifferenceInMetersLabelState(line, difference.length());
+        } else if (tvLabelRenderable != null) {
+            updateDifferenceInMetersLabelState(line, difference.length());
+        }
     }
 
     private void updateDifferenceInMetersLabelState(Line line, float difference) {
@@ -298,13 +305,16 @@ public class MainActivity extends AppCompatActivity {
         }
         labelNode.setLocalPosition(new Vector3(0, 0.04f, 0));
         line.setLength(difference * 100);
-        line.getTvLabel().setText(String.format(Locale.US, "%.2f", difference * 100) + "cm");
+
+        line.getTvLabel().setText(
+                String.format(Locale.US, "%.2f", difference * 100) + "cm"
+        );
     }
 
     private boolean allAnchorsInitialized() {
         boolean allAnchorsInitialized = true;
-        for (int i = 0; i < lines.size(); i++) {
-            if (!lines.get(i).anchorsInitialized()) {
+        for (int i = 0; i < baseLines.size(); i++) {
+            if (!baseLines.get(i).anchorsInitialized()) {
                 allAnchorsInitialized = false;
                 break;
             }

@@ -24,7 +24,7 @@ public class Line {
 
     private Vector3 baseSecondNodePosition;
 
-    private float length;
+    private float length; //cm
 
     public AnchorNode getFirstAnchorNode() {
         return firstAnchorNode;
