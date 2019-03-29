@@ -35,8 +35,6 @@ import java.util.Locale;
 @SuppressLint("SetTextI18n")
 public class MainActivity extends AppCompatActivity {
 
-    private static final String TAG = "test_" + MainActivity.class.getSimpleName();
-
     private static final int DELAY_UPDATE = 150;
 
     private static final int MAX_LINES = 2;
@@ -181,9 +179,9 @@ public class MainActivity extends AppCompatActivity {
                     for (int i = 1; i < baseLines.size(); i++) {
                         volume *= (baseLines.get(i).getLength());
                     }
-                    tvVolume.setText("V= ~"
-                            + String.format(Locale.US, "%.2f", volume / 1000000)
-                            + "m\u00B3");
+
+                    String v = String.format(Locale.US, "%.2f", volume / 1000000);
+                    tvVolume.setText("V= ~" + v + "m\u00B3");
                 }
             }
         };
@@ -232,7 +230,9 @@ public class MainActivity extends AppCompatActivity {
             line.setSecondNode(node);
         }
 
-        ModelRenderable model = ShapeFactory.makeSphere(0.015f, Vector3.zero(), shapeMaterial);
+        ModelRenderable model = ShapeFactory.makeSphere(
+                0.015f, Vector3.zero(), shapeMaterial
+        );
 
         model.setShadowCaster(false);
         model.setShadowReceiver(false);

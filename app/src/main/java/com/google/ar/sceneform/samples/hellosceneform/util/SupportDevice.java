@@ -21,9 +21,10 @@ public class SupportDevice {
                         .requireNonNull(activity.getSystemService(Context.ACTIVITY_SERVICE)))
                         .getDeviceConfigurationInfo()
                         .getGlEsVersion();
+
         if (Double.parseDouble(openGlVersionString) < MIN_OPENGL_VERSION) {
-            Log.e(TAG, "Application requires OpenGL ES 3.0 later");
-            Toast.makeText(activity, "Application requires OpenGL ES 3.0 or later", Toast.LENGTH_LONG)
+            Log.e(TAG, "App requires OpenGL ES 3.0 later");
+            Toast.makeText(activity, "App requires OpenGL ES 3.0 or later", Toast.LENGTH_LONG)
                     .show();
             activity.finish();
             return false;
